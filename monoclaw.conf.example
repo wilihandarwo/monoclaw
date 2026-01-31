@@ -1,0 +1,8 @@
+# monoclaw.conf - Example configuration file
+# Usage: sudo bash install.sh --config monoclaw.conf
+
+# Primary user for SSH access (required)
+PRIMARY_USER=admin
+
+# Custom SSH port (required)
+SSH_PORT=2222
