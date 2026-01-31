@@ -127,8 +127,110 @@ else
     echo "Run 'sudo monoclaw-tailscale' to configure"
 fi
 
+# Check for token mismatch (causes "pairing required" error)
+echo ""
+echo "Checking gateway authentication token..."
+
+STORED_TOKEN=""
+CONFIG_TOKEN=""
+TOKEN_FIXED=false
+OPENCLAW_CONFIG="/var/lib/openclaw/.openclaw/openclaw.json"
+
+# Get stored token
+if [ -f /etc/monoclaw/auth-token ]; then
+    STORED_TOKEN=$(cat /etc/monoclaw/auth-token)
+fi
+
+# Get config token
+if [ -f "$OPENCLAW_CONFIG" ]; then
+    if command -v jq >/dev/null 2>&1; then
+        CONFIG_TOKEN=$(jq -r '.gateway.auth.token // empty' "$OPENCLAW_CONFIG" 2>/dev/null)
+    else
+        # Fallback: extract with grep/sed
+        CONFIG_TOKEN=$(grep -o '"token"[[:space:]]*:[[:space:]]*"[^"]*"' "$OPENCLAW_CONFIG" 2>/dev/null | head -1 | sed 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+    fi
+fi
+
+if [ -z "$STORED_TOKEN" ]; then
+    echo -e "${RED}No auth token found in /etc/monoclaw/auth-token${NC}"
+    echo "Generating new token..."
+    STORED_TOKEN=$(openssl rand -hex 32)
+    echo "$STORED_TOKEN" > /etc/monoclaw/auth-token
+    chmod 600 /etc/monoclaw/auth-token
+    echo -e "${GREEN}New token generated${NC}"
+fi
+
+if [ -z "$CONFIG_TOKEN" ]; then
+    echo -e "${YELLOW}Auth token missing from openclaw.json - this causes 'pairing required' error${NC}"
+    echo "Injecting token into config..."
+    TOKEN_FIXED=true
+elif [ "$CONFIG_TOKEN" != "$STORED_TOKEN" ]; then
+    echo -e "${YELLOW}Token mismatch detected - this causes 'pairing required' error${NC}"
+    echo "  Stored:  ${STORED_TOKEN:0:16}..."
+    echo "  Config:  ${CONFIG_TOKEN:0:16}..."
+    echo "Fixing token in config..."
+    TOKEN_FIXED=true
+else
+    echo -e "${GREEN}Token is correctly configured${NC}"
+fi
+
+# Fix token if needed
+if [ "$TOKEN_FIXED" = "true" ]; then
+    if command -v jq >/dev/null 2>&1; then
+        jq --arg token "$STORED_TOKEN" '.gateway.auth = {"mode": "token", "token": $token}' \
+            "$OPENCLAW_CONFIG" > "${OPENCLAW_CONFIG}.tmp" && \
+            mv "${OPENCLAW_CONFIG}.tmp" "$OPENCLAW_CONFIG"
+    else
+        # If jq not available, recreate minimal config with token
+        cat > "$OPENCLAW_CONFIG" <<CONFIGEOF
+{
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "port": 18789,
+    "auth": {
+      "mode": "token",
+      "token": "${STORED_TOKEN}"
+    }
+  },
+  "channels": {},
+  "logging": {
+    "redactSensitive": "tools"
+  },
+  "discovery": {
+    "mdns": {
+      "mode": "minimal"
+    }
+  }
+}
+CONFIGEOF
+    fi
+
+    chown ${SERVICE_USER}:${SERVICE_USER} "$OPENCLAW_CONFIG"
+    chmod 600 "$OPENCLAW_CONFIG"
+    echo -e "${GREEN}Token fixed in config${NC}"
+
+    # Restart service to pick up new config
+    echo "Restarting service to apply token fix..."
+    systemctl restart openclaw
+    sleep 3
+
+    if systemctl is-active --quiet openclaw; then
+        echo -e "${GREEN}Service restarted successfully${NC}"
+    else
+        echo -e "${RED}Service failed to restart after token fix${NC}"
+    fi
+fi
+
 echo ""
 echo "=== Repair Complete ==="
+
+# Show token info if fixed
+if [ "$TOKEN_FIXED" = "true" ]; then
+    echo ""
+    echo "Your gateway token: $STORED_TOKEN"
+    echo "Enter this in the Password field of the dashboard to connect."
+fi
 SCRIPT
 
 chmod +x /usr/local/vps-scripts/monoclaw-repair

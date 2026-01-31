@@ -92,6 +92,65 @@ fi
 chown ${MONOCLAW_SERVICE_USER}:${MONOCLAW_SERVICE_USER} "$OPENCLAW_CONFIG"
 chmod 600 "$OPENCLAW_CONFIG"
 
+# Verify token was properly injected into config
+log_info "Verifying token injection..."
+verify_failed=false
+
+if [ -f "$OPENCLAW_CONFIG" ]; then
+    if command_exists jq; then
+        # Use jq to verify token
+        config_token=$(jq -r '.gateway.auth.token // empty' "$OPENCLAW_CONFIG" 2>/dev/null)
+        if [ -z "$config_token" ]; then
+            log_warning "Token not found in config - gateway.auth.token is missing"
+            verify_failed=true
+        elif [ "$config_token" != "$MONOCLAW_AUTH_TOKEN" ]; then
+            log_warning "Token mismatch detected between config and stored token"
+            verify_failed=true
+        fi
+    else
+        # Fallback: grep for token in config
+        if ! grep -q "$MONOCLAW_AUTH_TOKEN" "$OPENCLAW_CONFIG" 2>/dev/null; then
+            log_warning "Token may not be properly set in config (jq not available for precise check)"
+            verify_failed=true
+        fi
+    fi
+else
+    log_error "Config file not created at $OPENCLAW_CONFIG"
+    verify_failed=true
+fi
+
+# Attempt to fix if verification failed
+if [ "$verify_failed" = "true" ]; then
+    log_warning "Attempting to fix token injection..."
+
+    # Force recreate config with token
+    cat > "$OPENCLAW_CONFIG" <<EOF
+{
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "port": 18789,
+    "auth": {
+      "mode": "token",
+      "token": "${MONOCLAW_AUTH_TOKEN}"
+    }
+  },
+  "channels": {},
+  "logging": {
+    "redactSensitive": "tools"
+  },
+  "discovery": {
+    "mdns": {
+      "mode": "minimal"
+    }
+  }
+}
+EOF
+    chown ${MONOCLAW_SERVICE_USER}:${MONOCLAW_SERVICE_USER} "$OPENCLAW_CONFIG"
+    chmod 600 "$OPENCLAW_CONFIG"
+    log_info "Config recreated with token"
+fi
+
 log_info "OpenClaw security configuration complete"
 log_info "Security audit will be available after service starts"
 
