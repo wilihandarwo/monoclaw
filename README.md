@@ -39,6 +39,8 @@ cd monoclaw
 sudo bash install.sh
 ```
 
+> **Important:** When prompted for a password during installation, **always set one**. This password is used for `sudo` access and VPS console access. Without it, you can be locked out of administrative tasks.
+
 ### Installation Options
 
 ```bash
@@ -203,6 +205,23 @@ sudo monoclaw-config --show
 
 # Restart service
 sudo systemctl restart openclaw
+```
+
+### Service shows "running" but dashboard not accessible
+
+```bash
+# Check if port is actually listening
+ss -tlnp | grep 18789
+
+# If empty, the gateway isn't binding to the port
+# Try running manually to see errors
+sudo -u openclaw HOME=/var/lib/openclaw openclaw gateway --port 18789
+
+# Check if config file exists
+ls -la /var/lib/openclaw/.openclaw/
+
+# View config
+sudo cat /var/lib/openclaw/.openclaw/openclaw.json
 ```
 
 ### Can't access dashboard via Tailscale

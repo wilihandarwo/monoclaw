@@ -68,6 +68,16 @@ echo "To set up WhatsApp, Telegram, or other channels:"
 echo "  sudo -u openclaw HOME=/var/lib/openclaw openclaw channels login"
 echo ""
 
+# Troubleshooting
+echo "=== Troubleshooting ==="
+echo ""
+echo "If OpenClaw dashboard is not accessible:"
+echo "  1. Check if port is listening: ss -tlnp | grep 18789"
+echo "  2. View service logs: journalctl -u openclaw -n 50"
+echo "  3. Try manual start: sudo -u openclaw HOME=/var/lib/openclaw openclaw gateway --port 18789"
+echo "  4. Check Tailscale: tailscale status"
+echo ""
+
 # Reboot check
 if [ -f /var/run/reboot-required ]; then
     echo ""

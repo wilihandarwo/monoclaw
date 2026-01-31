@@ -4,6 +4,11 @@
 
 log_step "Creating OpenClaw systemd service..."
 
+# Ensure temp directory exists for OpenClaw
+mkdir -p /tmp/openclaw
+chown ${MONOCLAW_SERVICE_USER}:${MONOCLAW_SERVICE_USER} /tmp/openclaw
+chmod 700 /tmp/openclaw
+
 # Get the path to the openclaw binary
 OPENCLAW_PATH="$(command -v openclaw || echo /usr/bin/openclaw)"
 
@@ -58,14 +63,41 @@ systemctl enable openclaw
 systemctl stop openclaw 2>/dev/null || true
 systemctl start openclaw
 
-# Wait a moment for service to start
-sleep 3
+# Wait for service to start and verify it's actually listening
+log_step "Waiting for OpenClaw service to start..."
+sleep 5
 
 # Check service status
 log_step "Checking OpenClaw service status..."
-systemctl status openclaw --no-pager || {
-    log_warning "OpenClaw service may not have started correctly."
+if systemctl is-active --quiet openclaw; then
+    log_info "OpenClaw service is running"
+
+    # Verify the port is actually listening
+    log_step "Verifying OpenClaw is listening on port 18789..."
+    sleep 2
+
+    if ss -tlnp 2>/dev/null | grep -q ':18789'; then
+        log_info "OpenClaw gateway is listening on port 18789"
+    else
+        log_warning "OpenClaw service is running but port 18789 is NOT listening!"
+        log_warning "This usually means the gateway failed to start properly."
+        echo ""
+        echo "=== Recent logs ==="
+        journalctl -u openclaw -n 20 --no-pager 2>/dev/null || true
+        echo ""
+        log_info "Try running manually to see errors:"
+        log_info "  sudo -u openclaw HOME=/var/lib/openclaw openclaw gateway --port 18789"
+    fi
+else
+    log_warning "OpenClaw service failed to start!"
+    echo ""
+    echo "=== Service status ==="
+    systemctl status openclaw --no-pager 2>/dev/null || true
+    echo ""
+    echo "=== Recent logs ==="
+    journalctl -u openclaw -n 30 --no-pager 2>/dev/null || true
+    echo ""
     log_info "Check logs with: journalctl -u openclaw -n 50"
-}
+fi
 
 log_info "OpenClaw systemd service configured"

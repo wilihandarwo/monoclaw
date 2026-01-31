@@ -44,7 +44,8 @@ else
     echo ""
 
     # Run onboarding as the service user
-    sudo -u ${MONOCLAW_SERVICE_USER} HOME=/var/lib/openclaw openclaw onboard --install-daemon || {
+    # Note: We don't use --install-daemon because we create our own systemd service
+    sudo -u ${MONOCLAW_SERVICE_USER} HOME=/var/lib/openclaw openclaw onboard || {
         log_warning "Onboarding may have been partially completed. You can run 'openclaw onboard' later."
     }
 fi

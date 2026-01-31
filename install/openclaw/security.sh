@@ -99,18 +99,8 @@ fi
 chown ${MONOCLAW_SERVICE_USER}:${MONOCLAW_SERVICE_USER} "$OPENCLAW_CONFIG"
 chmod 600 "$OPENCLAW_CONFIG"
 
-log_step "Running OpenClaw security audit..."
-
-# Run security audit as service user (may not work if service hasn't fully started)
-sudo -u ${MONOCLAW_SERVICE_USER} HOME=/var/lib/openclaw openclaw security audit 2>/dev/null || {
-    log_info "Security audit will be available after service restart"
-}
-
-# Restart service to apply security configuration
-log_step "Restarting OpenClaw service to apply security settings..."
-systemctl restart openclaw || true
-
 log_info "OpenClaw security configuration complete"
+log_info "Security audit will be available after service starts"
 
 # Display token info
 echo ""

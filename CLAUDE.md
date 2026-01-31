@@ -36,8 +36,8 @@ Each module's `all.sh` orchestrates its sub-scripts via `run_script()`:
 # Example: install/openclaw/all.sh
 run_script "$MONOCLAW_INSTALL/openclaw/nodejs.sh"
 run_script "$MONOCLAW_INSTALL/openclaw/install.sh"
-run_script "$MONOCLAW_INSTALL/openclaw/systemd.sh"
-run_script "$MONOCLAW_INSTALL/openclaw/security.sh"
+run_script "$MONOCLAW_INSTALL/openclaw/security.sh"  # Config before service
+run_script "$MONOCLAW_INSTALL/openclaw/systemd.sh"   # Start service after config
 run_script "$MONOCLAW_INSTALL/openclaw/tailscale.sh"
 ```
 
@@ -51,7 +51,7 @@ Set by `install.sh` and available to all modules:
 Set by `install/config/all.sh` from user prompts:
 - `MONOCLAW_PRIMARY_USER` - Admin SSH user
 - `MONOCLAW_SSH_PORT` - Custom SSH port
-- `MONOCLAW_PRIMARY_USER_PASS` - Optional password for sudo
+- `MONOCLAW_PRIMARY_USER_PASS` - Password for sudo (strongly recommended to avoid lockout)
 - `MONOCLAW_SERVICE_USER` - OpenClaw service user (default: openclaw)
 
 ### Management Scripts Created on Target VPS

@@ -15,12 +15,22 @@ if [ -z "$MONOCLAW_SSH_PORT" ]; then
     MONOCLAW_SSH_PORT=${MONOCLAW_SSH_PORT:-22}
 fi
 
-# Optional local password for the primary user (used for sudo/console, not SSH)
+# Password for the primary user (used for sudo/console, not SSH)
 if [ -z "$MONOCLAW_PRIMARY_USER_PASS" ]; then
     echo ""
-    echo "Optional: Set a password for ${MONOCLAW_PRIMARY_USER} (for sudo/console access)"
-    echo "Leave empty to use SSH key-only authentication."
-    read -s -p "Enter password (leave empty for none): " MONOCLAW_PRIMARY_USER_PASS_1; echo
+    echo "=============================================="
+    echo "  IMPORTANT: Set a password for sudo access"
+    echo "=============================================="
+    echo ""
+    echo "This password is STRONGLY RECOMMENDED for:"
+    echo "  - Running sudo commands for system administration"
+    echo "  - Emergency access via VPS provider's web console"
+    echo "  - Debugging if something goes wrong"
+    echo ""
+    echo "SSH will still use key-only authentication (more secure)."
+    echo "This password is ONLY for local sudo/console access."
+    echo ""
+    read -s -p "Enter password for ${MONOCLAW_PRIMARY_USER}: " MONOCLAW_PRIMARY_USER_PASS_1; echo
 
     if [ -n "$MONOCLAW_PRIMARY_USER_PASS_1" ]; then
         read -s -p "Confirm password: " MONOCLAW_PRIMARY_USER_PASS_2; echo
