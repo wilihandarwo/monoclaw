@@ -25,18 +25,9 @@ echo "  1. Create tunnel: ssh -L 18789:127.0.0.1:18789 ${MONOCLAW_PRIMARY_USER}@
 echo "  2. Open browser: http://127.0.0.1:18789/"
 echo ""
 
-if command -v tailscale >/dev/null 2>&1 && tailscale status >/dev/null 2>&1; then
-    TAILSCALE_STATUS=$(tailscale status --json 2>/dev/null)
-    if [ -n "$TAILSCALE_STATUS" ]; then
-        HOSTNAME=$(echo "$TAILSCALE_STATUS" | grep -o '"HostName":"[^"]*"' | head -1 | cut -d'"' -f4)
-        TAILNET=$(echo "$TAILSCALE_STATUS" | grep -o '"MagicDNSSuffix":"[^"]*"' | head -1 | cut -d'"' -f4)
-        if [ -n "$HOSTNAME" ] && [ -n "$TAILNET" ]; then
-            echo "Tailscale access (from any device on your tailnet):"
-            echo "  https://${HOSTNAME}.${TAILNET}/"
-            echo ""
-        fi
-    fi
-fi
+echo "Tailscale access:"
+echo "  Run 'tailscale serve status' to see your HTTPS URL"
+echo ""
 
 # Management Commands
 echo "=== Management Commands ==="
