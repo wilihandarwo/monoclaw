@@ -62,6 +62,8 @@ fi
 
 if [ "$create_fresh_config" = "true" ]; then
     # Create secure default configuration
+    # Note: Empty channels - gateway chat works without explicit channels
+    # Add WhatsApp/Telegram later with: sudo -u openclaw HOME=/var/lib/openclaw openclaw channels login
     cat > "$OPENCLAW_CONFIG" <<EOF
 {
   "gateway": {
@@ -73,16 +75,7 @@ if [ "$create_fresh_config" = "true" ]; then
       "token": "${MONOCLAW_AUTH_TOKEN}"
     }
   },
-  "channels": {
-    "whatsapp": {
-      "dmPolicy": "pairing",
-      "groups": {
-        "*": {
-          "requireMention": true
-        }
-      }
-    }
-  },
+  "channels": {},
   "logging": {
     "redactSensitive": "tools"
   },
