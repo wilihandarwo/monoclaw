@@ -15,5 +15,6 @@ run_script "$MONOCLAW_INSTALL/scripts/monoclaw-logs.sh"
 run_script "$MONOCLAW_INSTALL/scripts/monoclaw-security.sh"
 run_script "$MONOCLAW_INSTALL/scripts/monoclaw-update.sh"
 run_script "$MONOCLAW_INSTALL/scripts/monoclaw-tailscale.sh"
+run_script "$MONOCLAW_INSTALL/scripts/monoclaw-repair.sh"
 
 log_info "Management Scripts Complete"

@@ -17,20 +17,33 @@ OPENCLAW_PATH="$(command -v openclaw || echo /usr/bin/openclaw)"
 log_step "Checking systemd security feature support..."
 SYSTEMD_SECURITY_SUPPORTED=true
 
-# Create a test service to check namespace support
-cat > /tmp/test-namespace.service <<EOF
-[Service]
-Type=oneshot
-ExecStart=/bin/true
-ProtectSystem=strict
-EOF
-
-if ! systemd-analyze verify /tmp/test-namespace.service 2>/dev/null; then
+# Method 1: Check if running in a container (most reliable)
+CONTAINER_TYPE=$(systemd-detect-virt --container 2>/dev/null || echo "none")
+if [ "$CONTAINER_TYPE" != "none" ] && [ -n "$CONTAINER_TYPE" ]; then
+    log_warning "Container detected: $CONTAINER_TYPE"
+    log_info "Disabling namespace features (not supported in containers)"
     SYSTEMD_SECURITY_SUPPORTED=false
-    log_warning "Systemd namespace features not supported on this VPS"
+fi
+
+# Method 2: Check /proc/1/status for container indicators
+if [ "$SYSTEMD_SECURITY_SUPPORTED" = "true" ]; then
+    if grep -q "lxc\|docker\|container" /proc/1/cgroup 2>/dev/null; then
+        log_warning "Container environment detected via cgroup"
+        SYSTEMD_SECURITY_SUPPORTED=false
+    fi
+fi
+
+# Method 3: Try running a command with PrivateTmp (actual runtime test)
+if [ "$SYSTEMD_SECURITY_SUPPORTED" = "true" ]; then
+    if ! systemd-run --quiet --wait --property=PrivateTmp=yes /bin/true 2>/dev/null; then
+        log_warning "Namespace test failed at runtime"
+        SYSTEMD_SECURITY_SUPPORTED=false
+    fi
+fi
+
+if [ "$SYSTEMD_SECURITY_SUPPORTED" = "false" ]; then
     log_info "Using basic service configuration (still secure via loopback binding)"
 fi
-rm -f /tmp/test-namespace.service
 
 # Create systemd service unit file
 # Note: Using "openclaw gateway" not "openclaw daemon" (which is a legacy alias)
@@ -97,6 +110,46 @@ WantedBy=multi-user.target
 EOF
 fi
 
+# Function to create basic service (no security hardening)
+create_basic_service() {
+    log_info "Creating basic service configuration..."
+    cat > /etc/systemd/system/openclaw.service <<EOF
+[Unit]
+Description=OpenClaw AI Assistant Gateway
+Documentation=https://docs.openclaw.ai/
+After=network.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${MONOCLAW_SERVICE_USER}
+Group=${MONOCLAW_SERVICE_USER}
+WorkingDirectory=/var/lib/openclaw
+Environment=HOME=/var/lib/openclaw
+Environment=NODE_ENV=production
+ExecStart=${OPENCLAW_PATH} gateway --port 18789
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
+}
+
+# Function to start and verify service
+start_and_verify_service() {
+    systemctl stop openclaw 2>/dev/null || true
+    systemctl start openclaw
+    sleep 5
+
+    if systemctl is-active --quiet openclaw; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 log_step "Enabling and starting OpenClaw service..."
 
 # Reload systemd daemon
@@ -105,15 +158,26 @@ systemctl daemon-reload
 # Enable service to start on boot
 systemctl enable openclaw
 
-# Stop if running, then start fresh
-systemctl stop openclaw 2>/dev/null || true
-systemctl start openclaw
+# Try to start the service
+if ! start_and_verify_service; then
+    # Check if it's a NAMESPACE error
+    if systemctl status openclaw 2>&1 | grep -q "NAMESPACE\|226"; then
+        log_warning "Service failed with NAMESPACE error - VPS doesn't support security hardening"
+        log_info "Recreating service without namespace features..."
 
-# Wait for service to start and verify it's actually listening
-log_step "Waiting for OpenClaw service to start..."
-sleep 5
+        # Recreate with basic config
+        create_basic_service
 
-# Check service status
+        # Try again
+        if start_and_verify_service; then
+            log_info "Service started successfully with basic configuration"
+        else
+            log_warning "Service still failed after removing security hardening"
+        fi
+    fi
+fi
+
+# Final status check
 log_step "Checking OpenClaw service status..."
 if systemctl is-active --quiet openclaw; then
     log_info "OpenClaw service is running"
