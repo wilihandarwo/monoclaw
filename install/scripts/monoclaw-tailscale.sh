@@ -60,7 +60,12 @@ serve_setup() {
     check_tailscale
 
     echo "Setting up Tailscale Serve for OpenClaw dashboard..."
-    tailscale serve --bg https+insecure://127.0.0.1:18789
+    # Proxy HTTPS traffic to localhost:18789
+    tailscale serve --bg 18789 || {
+        echo "Warning: Tailscale Serve may have failed."
+        echo "Try running: tailscale serve --bg 18789"
+        return 1
+    }
 
     echo ""
     echo "Tailscale Serve configured. Your dashboard URL:"
@@ -75,19 +80,16 @@ show_url() {
         exit 1
     fi
 
-    TAILSCALE_STATUS=$(tailscale status --json 2>/dev/null)
-    if [ -n "$TAILSCALE_STATUS" ]; then
-        HOSTNAME=$(echo "$TAILSCALE_STATUS" | grep -o '"HostName":"[^"]*"' | head -1 | cut -d'"' -f4)
-        TAILNET=$(echo "$TAILSCALE_STATUS" | grep -o '"MagicDNSSuffix":"[^"]*"' | head -1 | cut -d'"' -f4)
-        if [ -n "$HOSTNAME" ] && [ -n "$TAILNET" ]; then
-            echo ""
-            echo "Dashboard URL: https://${HOSTNAME}.${TAILNET}/"
-            echo ""
-            echo "Access this URL from any device on your Tailscale network."
-        else
-            echo "Could not determine Tailscale URL. Check 'tailscale serve status'"
-        fi
-    fi
+    # Try to get serve status for the URL
+    echo ""
+    echo "=== Dashboard URL ==="
+    echo ""
+    tailscale serve status 2>/dev/null || {
+        echo "Tailscale Serve not configured."
+        echo "Run 'monoclaw-tailscale serve-setup' to configure."
+    }
+    echo ""
+    echo "Access this URL from any device on your Tailscale network."
 }
 
 case "${1:-help}" in

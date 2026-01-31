@@ -32,7 +32,7 @@ Designed for **a fresh Ubuntu 24.04 VPS**.
 ssh root@your_server_ip
 
 # Clone the installer
-git clone https://github.com/your-repo/monoclaw.git
+git clone https://github.com/wilihandarwo/monoclaw.git
 cd monoclaw
 
 # Run the installer

@@ -33,16 +33,23 @@ tailscale up
 log_step "Waiting for Tailscale connection..."
 sleep 5
 
+# Initialize variables
+TAILSCALE_HOSTNAME=""
+TAILSCALE_IP=""
+
 # Check Tailscale status
 if tailscale status >/dev/null 2>&1; then
     log_info "Tailscale connected successfully"
 
-    # Get the Tailscale hostname
-    TAILSCALE_HOSTNAME=$(tailscale status --json | grep -o '"Self":{[^}]*}' | grep -o '"HostName":"[^"]*"' | cut -d'"' -f4)
-    TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "unknown")
+    # Get the Tailscale IP (with error handling)
+    TAILSCALE_IP=$(tailscale ip -4 2>/dev/null) || TAILSCALE_IP="unknown"
 
-    log_info "Tailscale IP: ${TAILSCALE_IP}"
-    log_info "Tailscale hostname: ${TAILSCALE_HOSTNAME}"
+    # Get hostname using a simpler method
+    TAILSCALE_HOSTNAME=$(hostname) || TAILSCALE_HOSTNAME=""
+
+    if [ -n "$TAILSCALE_IP" ] && [ "$TAILSCALE_IP" != "unknown" ]; then
+        log_info "Tailscale IP: ${TAILSCALE_IP}"
+    fi
 else
     log_warning "Tailscale may not be connected. Run 'tailscale up' to authenticate."
 fi
@@ -51,7 +58,11 @@ log_step "Configuring Tailscale Serve for OpenClaw dashboard..."
 
 # Configure Tailscale Serve to proxy the OpenClaw dashboard
 # This creates: https://<hostname>.<tailnet>.ts.net → localhost:18789
-tailscale serve --bg https+insecure://127.0.0.1:18789
+# Use || true to prevent script failure if serve command has issues
+tailscale serve --bg 18789 || {
+    log_warning "Tailscale Serve configuration may have failed."
+    log_info "You can configure it manually later with: tailscale serve --bg 18789"
+}
 
 log_info "Tailscale Serve configured"
 
@@ -62,11 +73,7 @@ echo ""
 echo "Your OpenClaw dashboard is now accessible via Tailscale!"
 echo ""
 echo "Access it from any device on your Tailscale network at:"
-if [ -n "$TAILSCALE_HOSTNAME" ]; then
-    echo "  https://${TAILSCALE_HOSTNAME}.<your-tailnet>.ts.net"
-else
-    echo "  https://<your-hostname>.<your-tailnet>.ts.net"
-fi
+echo "  https://<your-hostname>.<your-tailnet>.ts.net/"
 echo ""
 echo "To find your exact URL, run: tailscale serve status"
 echo ""
@@ -75,7 +82,7 @@ echo "Install Tailscale at: https://tailscale.com/download"
 echo ""
 
 # Store Tailscale info for later reference
-if [ -n "$TAILSCALE_IP" ]; then
+if [ -n "$TAILSCALE_IP" ] && [ "$TAILSCALE_IP" != "unknown" ]; then
     echo "$TAILSCALE_IP" > /etc/monoclaw/tailscale-ip
     chmod 644 /etc/monoclaw/tailscale-ip
 fi
