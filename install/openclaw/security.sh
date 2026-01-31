@@ -4,25 +4,39 @@
 
 log_step "Configuring OpenClaw security settings..."
 
-# Generate a secure gateway authentication token
-MONOCLAW_AUTH_TOKEN=$(openssl rand -hex 32)
+# Check if token already exists
+if [ -f /etc/monoclaw/auth-token ]; then
+    MONOCLAW_AUTH_TOKEN=$(cat /etc/monoclaw/auth-token)
+    log_info "Using existing gateway authentication token"
+else
+    # Generate a secure gateway authentication token
+    MONOCLAW_AUTH_TOKEN=$(openssl rand -hex 32)
 
-# Store the token securely
-echo "$MONOCLAW_AUTH_TOKEN" > /etc/monoclaw/auth-token
-chmod 600 /etc/monoclaw/auth-token
+    # Store the token securely
+    echo "$MONOCLAW_AUTH_TOKEN" > /etc/monoclaw/auth-token
+    chmod 600 /etc/monoclaw/auth-token
+    log_info "Generated new gateway authentication token"
+fi
 
 # Create OpenClaw configuration with security settings
 # Based on https://docs.openclaw.ai/gateway/security
 OPENCLAW_CONFIG="/var/lib/openclaw/.openclaw/openclaw.json"
 
+# Ensure directory exists
+mkdir -p /var/lib/openclaw/.openclaw
+chown ${MONOCLAW_SERVICE_USER}:${MONOCLAW_SERVICE_USER} /var/lib/openclaw/.openclaw
+chmod 700 /var/lib/openclaw/.openclaw
+
 # Check if config already exists from onboarding
+create_fresh_config=false
+
 if [ -f "$OPENCLAW_CONFIG" ]; then
     log_info "Existing OpenClaw configuration found, updating security settings..."
 
     # Backup existing config
     cp "$OPENCLAW_CONFIG" "${OPENCLAW_CONFIG}.backup"
 
-    # Use jq to update security settings if available, otherwise create new config
+    # Use jq to update security settings if available
     if command_exists jq; then
         jq --arg token "$MONOCLAW_AUTH_TOKEN" '
             .gateway = (.gateway // {}) |
@@ -46,7 +60,7 @@ else
     create_fresh_config=true
 fi
 
-if [ "${create_fresh_config:-false}" = "true" ]; then
+if [ "$create_fresh_config" = "true" ]; then
     # Create secure default configuration
     cat > "$OPENCLAW_CONFIG" <<EOF
 {
@@ -85,9 +99,6 @@ fi
 chown ${MONOCLAW_SERVICE_USER}:${MONOCLAW_SERVICE_USER} "$OPENCLAW_CONFIG"
 chmod 600 "$OPENCLAW_CONFIG"
 
-# Ensure .openclaw directory has proper permissions
-chmod 700 /var/lib/openclaw/.openclaw
-
 log_step "Running OpenClaw security audit..."
 
 # Run security audit as service user (may not work if service hasn't fully started)
@@ -97,7 +108,7 @@ sudo -u ${MONOCLAW_SERVICE_USER} HOME=/var/lib/openclaw openclaw security audit 
 
 # Restart service to apply security configuration
 log_step "Restarting OpenClaw service to apply security settings..."
-systemctl restart openclaw
+systemctl restart openclaw || true
 
 log_info "OpenClaw security configuration complete"
 
@@ -105,7 +116,7 @@ log_info "OpenClaw security configuration complete"
 echo ""
 print_box "Gateway Authentication Token"
 echo ""
-echo "Your gateway authentication token has been generated and stored at:"
+echo "Your gateway authentication token is stored at:"
 echo "  /etc/monoclaw/auth-token"
 echo ""
 echo "Token: ${MONOCLAW_AUTH_TOKEN}"

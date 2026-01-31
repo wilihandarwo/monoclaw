@@ -4,35 +4,40 @@
 
 log_step "Setting up SSH key for ${MONOCLAW_PRIMARY_USER}..."
 
-if [ ! -f "/root/.ssh/authorized_keys" ] || [ ! -s "/root/.ssh/authorized_keys" ]; then
-    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-    echo "!!! ERROR: /root/.ssh/authorized_keys is empty or does not exist.          !!!"
-    echo "!!! The new user '${MONOCLAW_PRIMARY_USER}' will not be able to log in with an SSH key. !!!"
-    echo "!!! Please add your public SSH key to /root/.ssh/authorized_keys and rerun. !!!"
-    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-    exit 1
+# Check if SSH keys already exist for the user
+if [ -f "/home/${MONOCLAW_PRIMARY_USER}/.ssh/authorized_keys" ] && [ -s "/home/${MONOCLAW_PRIMARY_USER}/.ssh/authorized_keys" ]; then
+    log_info "SSH keys already configured for ${MONOCLAW_PRIMARY_USER}, skipping copy"
+else
+    if [ ! -f "/root/.ssh/authorized_keys" ] || [ ! -s "/root/.ssh/authorized_keys" ]; then
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        echo "!!! ERROR: /root/.ssh/authorized_keys is empty or does not exist.          !!!"
+        echo "!!! The new user '${MONOCLAW_PRIMARY_USER}' will not be able to log in with an SSH key. !!!"
+        echo "!!! Please add your public SSH key to /root/.ssh/authorized_keys and rerun. !!!"
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        exit 1
+    fi
+
+    print_divider
+    echo "INFO: Installing the following public key from /root/.ssh/authorized_keys for '${MONOCLAW_PRIMARY_USER}':"
+    echo ""
+    cat "/root/.ssh/authorized_keys"
+    echo ""
+    echo "Please verify that your local machine is using the corresponding private key."
+    print_divider
+    sleep 5 # Give user time to read
+
+    # Copy SSH keys from root
+    mkdir -p /home/${MONOCLAW_PRIMARY_USER}/.ssh
+    rsync --archive --chown=${MONOCLAW_PRIMARY_USER}:${MONOCLAW_PRIMARY_USER} /root/.ssh/ /home/${MONOCLAW_PRIMARY_USER}/.ssh/
+    chmod 700 /home/${MONOCLAW_PRIMARY_USER}/.ssh
+    chmod 600 /home/${MONOCLAW_PRIMARY_USER}/.ssh/authorized_keys
+
+    print_divider
+    echo "INFO: Verifying final ownership and permissions for SSH files:"
+    ls -ld /home/${MONOCLAW_PRIMARY_USER} /home/${MONOCLAW_PRIMARY_USER}/.ssh /home/${MONOCLAW_PRIMARY_USER}/.ssh/authorized_keys
+    print_divider
+    sleep 2
 fi
-
-print_divider
-echo "INFO: Installing the following public key from /root/.ssh/authorized_keys for '${MONOCLAW_PRIMARY_USER}':"
-echo ""
-cat "/root/.ssh/authorized_keys"
-echo ""
-echo "Please verify that your local machine is using the corresponding private key."
-print_divider
-sleep 5 # Give user time to read
-
-# Copy SSH keys from root
-mkdir -p /home/${MONOCLAW_PRIMARY_USER}/.ssh
-rsync --archive --chown=${MONOCLAW_PRIMARY_USER}:${MONOCLAW_PRIMARY_USER} /root/.ssh/ /home/${MONOCLAW_PRIMARY_USER}/.ssh/
-chmod 700 /home/${MONOCLAW_PRIMARY_USER}/.ssh
-chmod 600 /home/${MONOCLAW_PRIMARY_USER}/.ssh/authorized_keys
-
-print_divider
-echo "INFO: Verifying final ownership and permissions for SSH files:"
-ls -ld /home/${MONOCLAW_PRIMARY_USER} /home/${MONOCLAW_PRIMARY_USER}/.ssh /home/${MONOCLAW_PRIMARY_USER}/.ssh/authorized_keys
-print_divider
-sleep 2
 
 log_step "Securing SSH with a dedicated configuration file..."
 
@@ -95,6 +100,7 @@ systemctl restart ssh
 
 # Verify that sshd is listening on the custom port
 if command -v ss >/dev/null 2>&1; then
+    sleep 2  # Give sshd time to restart
     if ss -tulpn 2>/dev/null | grep -q ":${MONOCLAW_SSH_PORT} "; then
         log_info "Verified sshd is listening on port ${MONOCLAW_SSH_PORT}."
         log_step "Removing default SSH port 22 from firewall..."

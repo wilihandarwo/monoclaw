@@ -52,7 +52,8 @@ systemctl daemon-reload
 # Enable service to start on boot
 systemctl enable openclaw
 
-# Start the service
+# Stop if running, then start fresh
+systemctl stop openclaw 2>/dev/null || true
 systemctl start openclaw
 
 # Wait a moment for service to start

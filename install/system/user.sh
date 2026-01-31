@@ -4,9 +4,14 @@
 
 log_step "Creating primary user: ${MONOCLAW_PRIMARY_USER}"
 
-# Create user without password, expecting SSH key usage
-adduser --disabled-password --gecos "" ${MONOCLAW_PRIMARY_USER}
-usermod -aG sudo ${MONOCLAW_PRIMARY_USER}
+# Check if user already exists
+if id "${MONOCLAW_PRIMARY_USER}" &>/dev/null; then
+    log_info "User ${MONOCLAW_PRIMARY_USER} already exists, skipping creation"
+else
+    # Create user without password, expecting SSH key usage
+    adduser --disabled-password --gecos "" ${MONOCLAW_PRIMARY_USER}
+    usermod -aG sudo ${MONOCLAW_PRIMARY_USER}
+fi
 
 # If a password was supplied, set it now (for sudo/console use only).
 # SSH password logins remain disabled by sshd_config (PasswordAuthentication no).
@@ -17,16 +22,22 @@ fi
 
 log_step "Creating OpenClaw service user: ${MONOCLAW_SERVICE_USER}"
 
-# Create dedicated service user for OpenClaw daemon
-# - System user (no login shell, no home directory in /home)
-# - Home directory at /var/lib/openclaw for OpenClaw data
-useradd --system \
-    --shell /usr/sbin/nologin \
-    --home-dir /var/lib/openclaw \
-    --create-home \
-    ${MONOCLAW_SERVICE_USER}
+# Check if service user already exists
+if id "${MONOCLAW_SERVICE_USER}" &>/dev/null; then
+    log_info "Service user ${MONOCLAW_SERVICE_USER} already exists, skipping creation"
+else
+    # Create dedicated service user for OpenClaw daemon
+    # - System user (no login shell, no home directory in /home)
+    # - Home directory at /var/lib/openclaw for OpenClaw data
+    useradd --system \
+        --shell /usr/sbin/nologin \
+        --home-dir /var/lib/openclaw \
+        --create-home \
+        ${MONOCLAW_SERVICE_USER}
+fi
 
-# Set proper permissions on service user home
+# Ensure proper permissions on service user home (always run this)
+mkdir -p /var/lib/openclaw
 chmod 700 /var/lib/openclaw
 chown ${MONOCLAW_SERVICE_USER}:${MONOCLAW_SERVICE_USER} /var/lib/openclaw
 
