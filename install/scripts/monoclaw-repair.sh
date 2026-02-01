@@ -177,8 +177,10 @@ fi
 # Fix token if needed
 if [ "$TOKEN_FIXED" = "true" ]; then
     if command -v jq >/dev/null 2>&1; then
-        jq --arg token "$STORED_TOKEN" '.gateway.auth = {"mode": "token", "token": $token}' \
-            "$OPENCLAW_CONFIG" > "${OPENCLAW_CONFIG}.tmp" && \
+        jq --arg token "$STORED_TOKEN" '
+            .gateway.auth = {"mode": "token", "token": $token} |
+            .gateway.trustedProxies = ["127.0.0.1", "::1"]
+        ' "$OPENCLAW_CONFIG" > "${OPENCLAW_CONFIG}.tmp" && \
             mv "${OPENCLAW_CONFIG}.tmp" "$OPENCLAW_CONFIG"
     else
         # If jq not available, recreate minimal config with token
@@ -191,7 +193,8 @@ if [ "$TOKEN_FIXED" = "true" ]; then
     "auth": {
       "mode": "token",
       "token": "${STORED_TOKEN}"
-    }
+    },
+    "trustedProxies": ["127.0.0.1", "::1"]
   },
   "channels": {},
   "logging": {
@@ -247,6 +250,7 @@ if [ -n "$PRIMARY_USER" ] && [ "$PRIMARY_USER" != "root" ]; then
                     echo -e "${YELLOW}User config token mismatch - updating...${NC}"
                     jq --arg token "$STORED_TOKEN" '
                         .gateway.auth.token = $token |
+                        .gateway.trustedProxies = ["127.0.0.1", "::1"] |
                         .gateway.remote = (.gateway.remote // {}) |
                         .gateway.remote.token = $token
                     ' "$PRIMARY_USER_CONFIG" > "${PRIMARY_USER_CONFIG}.tmp" && \
@@ -271,6 +275,7 @@ if [ -n "$PRIMARY_USER" ] && [ "$PRIMARY_USER" != "root" ]; then
       "mode": "token",
       "token": "${STORED_TOKEN}"
     },
+    "trustedProxies": ["127.0.0.1", "::1"],
     "remote": {
       "token": "${STORED_TOKEN}"
     }

@@ -47,6 +47,7 @@ if [ -f "$OPENCLAW_CONFIG" ]; then
                 "mode": "token",
                 "token": $token
             } |
+            .gateway.trustedProxies = ["127.0.0.1", "::1"] |
             .logging = (.logging // {}) |
             .logging.redactSensitive = "tools" |
             .discovery = (.discovery // {}) |
@@ -64,6 +65,7 @@ if [ "$create_fresh_config" = "true" ]; then
     # Create secure default configuration
     # Note: Empty channels - gateway chat works without explicit channels
     # Add WhatsApp/Telegram later with: sudo -u openclaw HOME=/var/lib/openclaw openclaw channels login
+    # trustedProxies includes 127.0.0.1 for Tailscale Serve reverse proxy
     cat > "$OPENCLAW_CONFIG" <<EOF
 {
   "gateway": {
@@ -73,7 +75,8 @@ if [ "$create_fresh_config" = "true" ]; then
     "auth": {
       "mode": "token",
       "token": "${MONOCLAW_AUTH_TOKEN}"
-    }
+    },
+    "trustedProxies": ["127.0.0.1", "::1"]
   },
   "channels": {},
   "logging": {
@@ -133,7 +136,8 @@ if [ "$verify_failed" = "true" ]; then
     "auth": {
       "mode": "token",
       "token": "${MONOCLAW_AUTH_TOKEN}"
-    }
+    },
+    "trustedProxies": ["127.0.0.1", "::1"]
   },
   "channels": {},
   "logging": {
@@ -182,6 +186,7 @@ if [ -n "$MONOCLAW_PRIMARY_USER" ] && [ "$MONOCLAW_PRIMARY_USER" != "root" ]; th
                     "mode": "token",
                     "token": $token
                 } |
+                .gateway.trustedProxies = ["127.0.0.1", "::1"] |
                 .gateway.remote = (.gateway.remote // {}) |
                 .gateway.remote.token = $token
             ' "$PRIMARY_USER_CONFIG" > "${PRIMARY_USER_CONFIG}.tmp" && \
@@ -198,6 +203,7 @@ if [ -n "$MONOCLAW_PRIMARY_USER" ] && [ "$MONOCLAW_PRIMARY_USER" != "root" ]; th
       "mode": "token",
       "token": "${MONOCLAW_AUTH_TOKEN}"
     },
+    "trustedProxies": ["127.0.0.1", "::1"],
     "remote": {
       "token": "${MONOCLAW_AUTH_TOKEN}"
     }
