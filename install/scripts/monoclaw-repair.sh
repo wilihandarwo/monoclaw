@@ -179,7 +179,8 @@ if [ "$TOKEN_FIXED" = "true" ]; then
     if command -v jq >/dev/null 2>&1; then
         jq --arg token "$STORED_TOKEN" '
             .gateway.auth = {"mode": "token", "token": $token} |
-            .gateway.trustedProxies = ["127.0.0.1", "::1"]
+            .gateway.trustedProxies = ["127.0.0.1", "::1"] |
+            .controlUi = {"allowInsecureAuth": true}
         ' "$OPENCLAW_CONFIG" > "${OPENCLAW_CONFIG}.tmp" && \
             mv "${OPENCLAW_CONFIG}.tmp" "$OPENCLAW_CONFIG"
     else
@@ -195,6 +196,9 @@ if [ "$TOKEN_FIXED" = "true" ]; then
       "token": "${STORED_TOKEN}"
     },
     "trustedProxies": ["127.0.0.1", "::1"]
+  },
+  "controlUi": {
+    "allowInsecureAuth": true
   },
   "channels": {},
   "logging": {
@@ -252,7 +256,8 @@ if [ -n "$PRIMARY_USER" ] && [ "$PRIMARY_USER" != "root" ]; then
                         .gateway.auth.token = $token |
                         .gateway.trustedProxies = ["127.0.0.1", "::1"] |
                         .gateway.remote = (.gateway.remote // {}) |
-                        .gateway.remote.token = $token
+                        .gateway.remote.token = $token |
+                        .controlUi = {"allowInsecureAuth": true}
                     ' "$PRIMARY_USER_CONFIG" > "${PRIMARY_USER_CONFIG}.tmp" && \
                     mv "${PRIMARY_USER_CONFIG}.tmp" "$PRIMARY_USER_CONFIG"
                     chown "${PRIMARY_USER}:${PRIMARY_USER}" "$PRIMARY_USER_CONFIG"
@@ -279,6 +284,9 @@ if [ -n "$PRIMARY_USER" ] && [ "$PRIMARY_USER" != "root" ]; then
     "remote": {
       "token": "${STORED_TOKEN}"
     }
+  },
+  "controlUi": {
+    "allowInsecureAuth": true
   },
   "channels": {},
   "logging": {
