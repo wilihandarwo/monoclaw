@@ -222,15 +222,88 @@ CONFIGEOF
     fi
 fi
 
+# Sync primary user's config with system token
+echo ""
+echo "Syncing primary user config..."
+
+PRIMARY_USER=$(cat /etc/monoclaw/primary-user 2>/dev/null || echo "")
+if [ -n "$PRIMARY_USER" ] && [ "$PRIMARY_USER" != "root" ]; then
+    PRIMARY_USER_HOME=$(getent passwd "$PRIMARY_USER" | cut -d: -f6)
+
+    if [ -n "$PRIMARY_USER_HOME" ] && [ -d "$PRIMARY_USER_HOME" ]; then
+        PRIMARY_USER_CONFIG="$PRIMARY_USER_HOME/.openclaw/openclaw.json"
+
+        # Create directory structure if missing
+        mkdir -p "$PRIMARY_USER_HOME/.openclaw/agents/main/sessions"
+        mkdir -p "$PRIMARY_USER_HOME/.openclaw/credentials"
+
+        if [ -f "$PRIMARY_USER_CONFIG" ]; then
+            # Check if user config has different token
+            if command -v jq >/dev/null 2>&1; then
+                USER_TOKEN=$(jq -r '.gateway.auth.token // empty' "$PRIMARY_USER_CONFIG" 2>/dev/null)
+                USER_REMOTE_TOKEN=$(jq -r '.gateway.remote.token // empty' "$PRIMARY_USER_CONFIG" 2>/dev/null)
+
+                if [ "$USER_TOKEN" != "$STORED_TOKEN" ] || [ "$USER_REMOTE_TOKEN" != "$STORED_TOKEN" ]; then
+                    echo -e "${YELLOW}User config token mismatch - updating...${NC}"
+                    jq --arg token "$STORED_TOKEN" '
+                        .gateway.auth.token = $token |
+                        .gateway.remote = (.gateway.remote // {}) |
+                        .gateway.remote.token = $token
+                    ' "$PRIMARY_USER_CONFIG" > "${PRIMARY_USER_CONFIG}.tmp" && \
+                    mv "${PRIMARY_USER_CONFIG}.tmp" "$PRIMARY_USER_CONFIG"
+                    chown "${PRIMARY_USER}:${PRIMARY_USER}" "$PRIMARY_USER_CONFIG"
+                    chmod 600 "$PRIMARY_USER_CONFIG"
+                    echo -e "${GREEN}User config updated${NC}"
+                else
+                    echo -e "${GREEN}User config token matches${NC}"
+                fi
+            fi
+        else
+            # Create user config with matching token
+            echo "Creating user config..."
+            cat > "$PRIMARY_USER_CONFIG" <<USERCONFIGEOF
+{
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "port": 18789,
+    "auth": {
+      "mode": "token",
+      "token": "${STORED_TOKEN}"
+    },
+    "remote": {
+      "token": "${STORED_TOKEN}"
+    }
+  },
+  "channels": {},
+  "logging": {
+    "redactSensitive": "tools"
+  },
+  "discovery": {
+    "mdns": {
+      "mode": "minimal"
+    }
+  }
+}
+USERCONFIGEOF
+            echo -e "${GREEN}User config created${NC}"
+        fi
+
+        # Fix ownership and permissions
+        chown -R "${PRIMARY_USER}:${PRIMARY_USER}" "$PRIMARY_USER_HOME/.openclaw"
+        chmod 700 "$PRIMARY_USER_HOME/.openclaw"
+        [ -f "$PRIMARY_USER_CONFIG" ] && chmod 600 "$PRIMARY_USER_CONFIG"
+    fi
+else
+    echo -e "${YELLOW}Primary user not found in /etc/monoclaw/primary-user${NC}"
+fi
+
 echo ""
 echo "=== Repair Complete ==="
 
-# Show token info if fixed
-if [ "$TOKEN_FIXED" = "true" ]; then
-    echo ""
-    echo "Your gateway token: $STORED_TOKEN"
-    echo "Enter this in the Password field of the dashboard to connect."
-fi
+echo ""
+echo "Your gateway token: $STORED_TOKEN"
+echo "Enter this in the Password field of the dashboard to connect."
 SCRIPT
 
 chmod +x /usr/local/vps-scripts/monoclaw-repair

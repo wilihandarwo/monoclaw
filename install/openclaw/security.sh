@@ -154,6 +154,76 @@ fi
 log_info "OpenClaw security configuration complete"
 log_info "Security audit will be available after service starts"
 
+# Also configure the primary user's OpenClaw config with the same token
+# This prevents "pairing required" errors when user runs openclaw commands
+if [ -n "$MONOCLAW_PRIMARY_USER" ] && [ "$MONOCLAW_PRIMARY_USER" != "root" ]; then
+    PRIMARY_USER_HOME=$(getent passwd "$MONOCLAW_PRIMARY_USER" | cut -d: -f6)
+
+    if [ -n "$PRIMARY_USER_HOME" ] && [ -d "$PRIMARY_USER_HOME" ]; then
+        log_info "Configuring OpenClaw for primary user ($MONOCLAW_PRIMARY_USER)..."
+
+        PRIMARY_USER_OPENCLAW_DIR="$PRIMARY_USER_HOME/.openclaw"
+        PRIMARY_USER_CONFIG="$PRIMARY_USER_OPENCLAW_DIR/openclaw.json"
+
+        # Create user's .openclaw directory
+        mkdir -p "$PRIMARY_USER_OPENCLAW_DIR"
+        mkdir -p "$PRIMARY_USER_OPENCLAW_DIR/agents/main/sessions"
+        mkdir -p "$PRIMARY_USER_OPENCLAW_DIR/credentials"
+
+        # Create or update user's config with matching token
+        if [ -f "$PRIMARY_USER_CONFIG" ] && command_exists jq; then
+            # Update existing config
+            jq --arg token "$MONOCLAW_AUTH_TOKEN" '
+                .gateway = (.gateway // {}) |
+                .gateway.mode = "local" |
+                .gateway.bind = "loopback" |
+                .gateway.port = 18789 |
+                .gateway.auth = {
+                    "mode": "token",
+                    "token": $token
+                } |
+                .gateway.remote = (.gateway.remote // {}) |
+                .gateway.remote.token = $token
+            ' "$PRIMARY_USER_CONFIG" > "${PRIMARY_USER_CONFIG}.tmp" && \
+            mv "${PRIMARY_USER_CONFIG}.tmp" "$PRIMARY_USER_CONFIG"
+        else
+            # Create fresh config for user
+            cat > "$PRIMARY_USER_CONFIG" <<USEREOF
+{
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "port": 18789,
+    "auth": {
+      "mode": "token",
+      "token": "${MONOCLAW_AUTH_TOKEN}"
+    },
+    "remote": {
+      "token": "${MONOCLAW_AUTH_TOKEN}"
+    }
+  },
+  "channels": {},
+  "logging": {
+    "redactSensitive": "tools"
+  },
+  "discovery": {
+    "mdns": {
+      "mode": "minimal"
+    }
+  }
+}
+USEREOF
+        fi
+
+        # Set proper ownership and permissions for user
+        chown -R "${MONOCLAW_PRIMARY_USER}:${MONOCLAW_PRIMARY_USER}" "$PRIMARY_USER_OPENCLAW_DIR"
+        chmod 700 "$PRIMARY_USER_OPENCLAW_DIR"
+        chmod 600 "$PRIMARY_USER_CONFIG"
+
+        log_info "Primary user OpenClaw config created with matching token"
+    fi
+fi
+
 # Display token info
 echo ""
 print_box "Gateway Authentication Token"

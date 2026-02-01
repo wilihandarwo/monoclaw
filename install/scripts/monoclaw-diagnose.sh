@@ -296,6 +296,70 @@ fi
 echo ""
 
 # ============================================
+# 7. Primary User Config Sync
+# ============================================
+echo -e "${BLUE}7. Primary User Config Sync${NC}"
+echo "-------------------------------------------"
+
+PRIMARY_USER=$(cat /etc/monoclaw/primary-user 2>/dev/null || echo "")
+if [ -n "$PRIMARY_USER" ] && [ "$PRIMARY_USER" != "root" ]; then
+    PRIMARY_USER_HOME=$(getent passwd "$PRIMARY_USER" | cut -d: -f6)
+
+    if [ -n "$PRIMARY_USER_HOME" ] && [ -d "$PRIMARY_USER_HOME" ]; then
+        info "Primary user: $PRIMARY_USER"
+        PRIMARY_USER_CONFIG="$PRIMARY_USER_HOME/.openclaw/openclaw.json"
+
+        if [ -d "$PRIMARY_USER_HOME/.openclaw" ]; then
+            pass "User .openclaw directory exists"
+        else
+            fail "User .openclaw directory missing"
+            info "Run 'sudo monoclaw-repair' to create it"
+        fi
+
+        if [ -f "$PRIMARY_USER_CONFIG" ]; then
+            pass "User openclaw.json exists"
+
+            if command -v jq >/dev/null 2>&1; then
+                USER_AUTH_TOKEN=$(jq -r '.gateway.auth.token // empty' "$PRIMARY_USER_CONFIG" 2>/dev/null)
+                USER_REMOTE_TOKEN=$(jq -r '.gateway.remote.token // empty' "$PRIMARY_USER_CONFIG" 2>/dev/null)
+
+                if [ -n "$USER_AUTH_TOKEN" ]; then
+                    if [ "$USER_AUTH_TOKEN" = "$STORED_TOKEN" ]; then
+                        pass "User auth token matches system token"
+                    else
+                        fail "User auth token MISMATCH - causes 'pairing required'!"
+                        info "System: ${STORED_TOKEN:0:16}..."
+                        info "User:   ${USER_AUTH_TOKEN:0:16}..."
+                    fi
+                else
+                    warn "User auth token not set"
+                fi
+
+                if [ -n "$USER_REMOTE_TOKEN" ]; then
+                    if [ "$USER_REMOTE_TOKEN" = "$STORED_TOKEN" ]; then
+                        pass "User remote token matches system token"
+                    else
+                        fail "User remote token MISMATCH - causes 'pairing required'!"
+                    fi
+                else
+                    warn "User remote token not set (gateway.remote.token)"
+                    info "This may cause issues when connecting to the dashboard"
+                fi
+            fi
+        else
+            fail "User openclaw.json missing"
+            info "Run 'sudo monoclaw-repair' to create it"
+        fi
+    else
+        warn "Primary user home directory not found"
+    fi
+else
+    warn "Primary user not configured in /etc/monoclaw/primary-user"
+fi
+
+echo ""
+
+# ============================================
 # Summary
 # ============================================
 echo "============================================="
