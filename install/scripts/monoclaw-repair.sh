@@ -179,8 +179,7 @@ if [ "$TOKEN_FIXED" = "true" ]; then
     if command -v jq >/dev/null 2>&1; then
         jq --arg token "$STORED_TOKEN" '
             .gateway.auth = {"mode": "token", "token": $token} |
-            .gateway.trustedProxies = ["127.0.0.1", "::1"] |
-            .controlUi = {"allowInsecureAuth": true}
+            .gateway.trustedProxies = ["127.0.0.1", "::1"]
         ' "$OPENCLAW_CONFIG" > "${OPENCLAW_CONFIG}.tmp" && \
             mv "${OPENCLAW_CONFIG}.tmp" "$OPENCLAW_CONFIG"
     else
@@ -196,9 +195,6 @@ if [ "$TOKEN_FIXED" = "true" ]; then
       "token": "${STORED_TOKEN}"
     },
     "trustedProxies": ["127.0.0.1", "::1"]
-  },
-  "controlUi": {
-    "allowInsecureAuth": true
   },
   "channels": {},
   "logging": {
@@ -256,8 +252,7 @@ if [ -n "$PRIMARY_USER" ] && [ "$PRIMARY_USER" != "root" ]; then
                         .gateway.auth.token = $token |
                         .gateway.trustedProxies = ["127.0.0.1", "::1"] |
                         .gateway.remote = (.gateway.remote // {}) |
-                        .gateway.remote.token = $token |
-                        .controlUi = {"allowInsecureAuth": true}
+                        .gateway.remote.token = $token
                     ' "$PRIMARY_USER_CONFIG" > "${PRIMARY_USER_CONFIG}.tmp" && \
                     mv "${PRIMARY_USER_CONFIG}.tmp" "$PRIMARY_USER_CONFIG"
                     chown "${PRIMARY_USER}:${PRIMARY_USER}" "$PRIMARY_USER_CONFIG"
@@ -285,9 +280,6 @@ if [ -n "$PRIMARY_USER" ] && [ "$PRIMARY_USER" != "root" ]; then
       "token": "${STORED_TOKEN}"
     }
   },
-  "controlUi": {
-    "allowInsecureAuth": true
-  },
   "channels": {},
   "logging": {
     "redactSensitive": "tools"
@@ -311,12 +303,63 @@ else
     echo -e "${YELLOW}Primary user not found in /etc/monoclaw/primary-user${NC}"
 fi
 
+# Check and approve pending device pairing requests
+echo ""
+echo "Checking for pending device pairing requests..."
+
+PENDING_DEVICES=$(sudo -u ${SERVICE_USER} HOME=/var/lib/openclaw openclaw devices list 2>/dev/null | grep -i "pending" || true)
+
+if [ -n "$PENDING_DEVICES" ]; then
+    echo -e "${YELLOW}Found pending device pairing requests:${NC}"
+    echo "$PENDING_DEVICES"
+    echo ""
+    echo "Auto-approving all pending devices..."
+
+    # Extract device IDs and approve each one
+    # Device list format typically shows ID in first column
+    DEVICE_IDS=$(sudo -u ${SERVICE_USER} HOME=/var/lib/openclaw openclaw devices list 2>/dev/null | grep -i "pending" | awk '{print $1}' || true)
+
+    APPROVED_COUNT=0
+    for DEVICE_ID in $DEVICE_IDS; do
+        if [ -n "$DEVICE_ID" ] && [ "$DEVICE_ID" != "ID" ]; then
+            echo "  Approving device: $DEVICE_ID"
+            if sudo -u ${SERVICE_USER} HOME=/var/lib/openclaw openclaw devices approve "$DEVICE_ID" 2>/dev/null; then
+                echo -e "  ${GREEN}Approved${NC}"
+                ((APPROVED_COUNT++))
+            else
+                echo -e "  ${YELLOW}Could not approve (may already be approved)${NC}"
+            fi
+        fi
+    done
+
+    if [ $APPROVED_COUNT -gt 0 ]; then
+        echo -e "${GREEN}Approved $APPROVED_COUNT pending device(s)${NC}"
+    fi
+else
+    # Also check using nodes pending command
+    PENDING_NODES=$(sudo -u ${SERVICE_USER} HOME=/var/lib/openclaw openclaw nodes pending 2>/dev/null || true)
+
+    if [ -n "$PENDING_NODES" ] && ! echo "$PENDING_NODES" | grep -q "No pending"; then
+        echo -e "${YELLOW}Found pending nodes:${NC}"
+        echo "$PENDING_NODES"
+        echo ""
+        echo "Note: You may need to manually approve these."
+        echo "Run: sudo -u ${SERVICE_USER} HOME=/var/lib/openclaw openclaw devices list"
+    else
+        echo -e "${GREEN}No pending device pairing requests${NC}"
+    fi
+fi
+
 echo ""
 echo "=== Repair Complete ==="
 
 echo ""
 echo "Your gateway token: $STORED_TOKEN"
 echo "Enter this in the Password field of the dashboard to connect."
+echo ""
+echo "If you still see 'pairing required' after entering the token:"
+echo "  1. Try accessing the dashboard from your device first"
+echo "  2. Then run 'sudo monoclaw-repair' again to approve the pairing request"
 SCRIPT
 
 chmod +x /usr/local/vps-scripts/monoclaw-repair

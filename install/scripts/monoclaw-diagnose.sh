@@ -360,6 +360,24 @@ fi
 echo ""
 
 # ============================================
+# 8. Pending Device Pairing
+# ============================================
+echo -e "${BLUE}8. Pending Device Pairing${NC}"
+echo "-------------------------------------------"
+
+PENDING_DEVICES=$(sudo -u ${SERVICE_USER} HOME=/var/lib/openclaw openclaw devices list 2>/dev/null | grep -i "pending" || true)
+
+if [ -n "$PENDING_DEVICES" ]; then
+    fail "Pending device pairing requests found - causes 'pairing required' error!"
+    echo "$PENDING_DEVICES"
+    info "Run 'sudo monoclaw-repair' to auto-approve pending devices"
+else
+    pass "No pending device pairing requests"
+fi
+
+echo ""
+
+# ============================================
 # Summary
 # ============================================
 echo "============================================="

@@ -48,7 +48,6 @@ if [ -f "$OPENCLAW_CONFIG" ]; then
                 "token": $token
             } |
             .gateway.trustedProxies = ["127.0.0.1", "::1"] |
-            .controlUi = { "allowInsecureAuth": true } |
             .logging = (.logging // {}) |
             .logging.redactSensitive = "tools" |
             .discovery = (.discovery // {}) |
@@ -67,7 +66,6 @@ if [ "$create_fresh_config" = "true" ]; then
     # Note: Empty channels - gateway chat works without explicit channels
     # Add WhatsApp/Telegram later with: sudo -u openclaw HOME=/var/lib/openclaw openclaw channels login
     # trustedProxies includes 127.0.0.1 for Tailscale Serve reverse proxy
-    # controlUi.allowInsecureAuth enables dashboard access without device identity
     cat > "$OPENCLAW_CONFIG" <<EOF
 {
   "gateway": {
@@ -79,9 +77,6 @@ if [ "$create_fresh_config" = "true" ]; then
       "token": "${MONOCLAW_AUTH_TOKEN}"
     },
     "trustedProxies": ["127.0.0.1", "::1"]
-  },
-  "controlUi": {
-    "allowInsecureAuth": true
   },
   "channels": {},
   "logging": {
@@ -144,9 +139,6 @@ if [ "$verify_failed" = "true" ]; then
     },
     "trustedProxies": ["127.0.0.1", "::1"]
   },
-  "controlUi": {
-    "allowInsecureAuth": true
-  },
   "channels": {},
   "logging": {
     "redactSensitive": "tools"
@@ -196,8 +188,7 @@ if [ -n "$MONOCLAW_PRIMARY_USER" ] && [ "$MONOCLAW_PRIMARY_USER" != "root" ]; th
                 } |
                 .gateway.trustedProxies = ["127.0.0.1", "::1"] |
                 .gateway.remote = (.gateway.remote // {}) |
-                .gateway.remote.token = $token |
-                .controlUi = { "allowInsecureAuth": true }
+                .gateway.remote.token = $token
             ' "$PRIMARY_USER_CONFIG" > "${PRIMARY_USER_CONFIG}.tmp" && \
             mv "${PRIMARY_USER_CONFIG}.tmp" "$PRIMARY_USER_CONFIG"
         else
@@ -216,9 +207,6 @@ if [ -n "$MONOCLAW_PRIMARY_USER" ] && [ "$MONOCLAW_PRIMARY_USER" != "root" ]; th
     "remote": {
       "token": "${MONOCLAW_AUTH_TOKEN}"
     }
-  },
-  "controlUi": {
-    "allowInsecureAuth": true
   },
   "channels": {},
   "logging": {
